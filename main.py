@@ -40,7 +40,8 @@ async def get_collection(request: Request):
                 "genres": ", ".join(info.get("genres", [])),
             })
             
-    return templates.TemplateResponse("index.html", {"request": request, "items": items})
+    return templates.TemplateResponse(request=request, name="index.html", context={"items": items})
+
 
 
 @app.post("/sync-item")
