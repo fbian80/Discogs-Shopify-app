@@ -16,32 +16,54 @@ SHOPIFY_ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
 @app.get("/", response_class=HTMLResponse)
 async def get_collection(request: Request):
     """Obtiene la colección de Discogs y la muestra en la app web."""
+    if not DISCOGS_USERNAME or not DISCOGS_TOKEN:
+        return HTMLResponse(
+            content="<h3>Error de configuración:</h3><p>Falta configurar 'DISCOGS_USERNAME' o 'DISCOGS_TOKEN' en las variables de Render.</p>"
+        )
+
     url = f"https://api.discogs.com/users/{DISCOGS_USERNAME}/collection/folders/0/releases?per_page=50&sort=added&sort_order=desc"
     headers = {
         "User-Agent": "MusicalesSanJoseSync/1.0",
         "Authorization": f"Discogs token={DISCOGS_TOKEN}"
     }
     
-    response = requests.get(url, headers=headers)
-    items = []
-    
-    if response.status_code == 200:
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        # Si Discogs responde con error, se muestra el detalle en pantalla en lugar de fallar
+        if response.status_code != 200:
+            return HTMLResponse(
+                content=f"<h3>Error al conectar con Discogs ({response.status_code}):</h3><p>{response.text}</p>"
+            )
+            
         data = response.json()
+        items = []
+        
         for release in data.get("releases", []):
             info = release.get("basic_information", {})
+            
+            # Validación segura de listas de artistas y formatos
+            artists = info.get("artists", [])
+            artist_name = artists[0].get("name", "Artista Desconocido") if artists else "Artista Desconocido"
+            
+            formats = info.get("formats", [])
+            format_name = formats[0].get("name", "Vinilo") if formats else "Vinilo"
+            
             items.append({
                 "id": release.get("id"),
                 "instance_id": release.get("instance_id"),
-                "title": info.get("title"),
-                "artist": info.get("artists", [{}])[0].get("name", "Artista Desconocido"),
+                "title": info.get("title", "Sin título"),
+                "artist": artist_name,
                 "year": info.get("year", "N/A"),
-                "cover_image": info.get("cover_image"),
-                "format": info.get("formats", [{}])[0].get("name", "Vinilo"),
+                "cover_image": info.get("cover_image", ""),
+                "format": format_name,
                 "genres": ", ".join(info.get("genres", [])),
             })
-            
-    return templates.TemplateResponse(request=request, name="index.html", context={"items": items})
+                
+        return templates.TemplateResponse(request=request, name="index.html", context={"items": items})
 
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>Error inesperado en el servidor:</h3><p>{str(e)}</p>")
 
 
 @app.post("/sync-item")
@@ -79,9 +101,12 @@ async def sync_item(
         }
     }
     
-    res = requests.post(url, json=product_data, headers=headers)
-    
-    if res.status_code in [200, 201]:
-        return {"status": "success", "message": f"'{artist} - {title}' publicado con éxito en Shopify."}
-    else:
-        return {"status": "error", "message": res.text}
+    try:
+        res = requests.post(url, json=product_data, headers=headers, timeout=10)
+        
+        if res.status_code in [200, 201]:
+            return {"status": "success", "message": f"'{artist} - {title}' publicado con éxito en Shopify."}
+        else:
+            return {"status": "error", "message": f"Error de Shopify ({res.status_code}): {res.text}"}
+    except Exception as e:
+        return {"status": "error", "message": f"Excepción al sincronizar: {str(e)}"}
