@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Musicales San José - Sincronizador Discogs a Shopify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4 text-gray-800">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-1 text-center text-indigo-700">Musicales San José</h1>
+        <p class="text-xs text-gray-500 text-center mb-4">Sincronizador Discogs ➔ Shopify</p>
+        
+        <div id="status" class="hidden mb-4 p-3 rounded text-sm text-white font-semibold text-center"></div>
+
+        <div class="space-y-4">
+            {% for item in items %}
+            <div class="bg-white p-4 rounded-xl shadow flex flex-col gap-3">
+                <div class="flex gap-4">
+                    <img src="{{ item.cover_image }}" alt="Portada" class="w-20 h-20 object-cover rounded-lg bg-gray-200">
+                    <div class="flex-1">
+                        <h2 class="font-bold text-base leading-tight">{{ item.title }}</h2>
+                        <p class="text-sm text-gray-600">{{ item.artist }}</p>
+                        <p class="text-xs text-gray-400 mt-1">{{ item.year }} • {{ item.format }}</p>
+                    </div>
+                </div>
+
+                <form onsubmit="syncItem(event, this)" class="flex gap-2 items-center">
+                    <input type="hidden" name="release_id" value="{{ item.id }}">
+                    <input type="hidden" name="title" value="{{ item.title }}">
+                    <input type="hidden" name="artist" value="{{ item.artist }}">
+                    <input type="hidden" name="cover_image" value="{{ item.cover_image }}">
+                    <input type="hidden" name="genres" value="{{ item.genres }}">
+                    
+                    <div class="relative flex-1">
+                        <span class="absolute left-2 top-2 text-xs text-gray-400">$</span>
+                        <input type="number" name="price" placeholder="Precio" required class="w-full pl-5 pr-2 py-1.5 border rounded-lg text-sm">
+                    </div>
+
+                    <button type="submit" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition">
+                        Llevar a Shopify
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        async function syncItem(e, form) {
+            e.preventDefault();
+            const btn = form.querySelector('button');
+            const statusDiv = document.getElementById('status');
+            
+            btn.disabled = true;
+            btn.innerText = 'Enviando...';
+
+            const formData = new FormData(form);
+            const response = await fetch('/sync-item', { method: 'POST', body: formData });
+            const result = await response.json();
+
+            statusDiv.classList.remove('hidden', 'bg-green-600', 'bg-red-600');
+            if (result.status === 'success') {
+                statusDiv.classList.add('bg-green-600');
+                statusDiv.innerText = result.message;
+                form.closest('.bg-white').style.opacity = '0.5';
+            } else {
+                statusDiv.classList.add('bg-red-600');
+                statusDiv.innerText = 'Error al importar: ' + result.message;
+            }
+            
+            btn.disabled = false;
+            btn.innerText = 'Llevar a Shopify';
+        }
+    </script>
+</body>
+</html>
